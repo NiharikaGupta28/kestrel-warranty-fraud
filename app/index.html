@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Kestrel Claim Risk Check</title>
+<style>
+:root{--bg:#f6f5f1;--card:#fff;--ink:#1d2327;--mut:#5f6b73;--line:#dcd9d0;--acc:#1f5f8b;--rev:#b3261e;--wat:#a15c00;--pay:#1b6e3c}
+@media (prefers-color-scheme:dark){:root{--bg:#14181b;--card:#1d2328;--ink:#e8ebed;--mut:#9aa6ad;--line:#333c42;--acc:#6db3e3;--rev:#ff8a80;--wat:#ffb74d;--pay:#7ed99b}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,Segoe UI,Roboto,sans-serif}
+main{max-width:880px;margin:0 auto;padding:24px 16px 48px}h1{font-size:1.4rem;margin:0 0 4px}p.sub{color:var(--mut);margin:0 0 20px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:18px;margin-bottom:16px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+label{display:block;font-size:.8rem;color:var(--mut);margin-bottom:3px}input,select{width:100%;padding:8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);font:inherit}
+button{background:var(--acc);color:#fff;border:0;border-radius:6px;padding:10px 18px;font:inherit;cursor:pointer}button.alt{background:transparent;color:var(--acc);border:1px solid var(--acc);padding:6px 12px;font-size:.85rem}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;align-items:center}
+.band{font-size:1.5rem;font-weight:700}.REVIEW{color:var(--rev)}.WATCH{color:var(--wat)}.PAY{color:var(--pay)}
+ul{margin:8px 0 0;padding-left:20px}li{margin:6px 0}.err{color:var(--rev)}.mut{color:var(--mut);font-size:.85rem}
+</style></head><body><main>
+<h1>Kestrel claim risk check</h1>
+<p class="sub">Enter one warranty claim. You get a risk band and the reasons, in plain English. The score ranks claims for the investigation desk; it does not decide payment.</p>
+<div class="card">
+ <div class="row" style="margin-top:0"><span class="mut">Try an example:</span>
+  <button class="alt" onclick="ex(0)">Young outlet, small, no inspection</button>
+  <button class="alt" onclick="ex(1)">Established outlet, inspected</button>
+  <button class="alt" onclick="ex(2)">Large claim, repeat customer</button></div>
+ <form id="f" onsubmit="go(event)" style="margin-top:14px"><div class="grid">
+  <div><label>Partner ID</label><input name="partner_id" required placeholder="SP3160"></div>
+  <div><label>Product SKU</label><input name="sku" required placeholder="KH-AF-02"></div>
+  <div><label>Claim amount (Rs)</label><input name="claim_amount_inr" type="number" min="1" step="any" required></div>
+  <div><label>Days since purchase</label><input name="days_since_purchase" type="number" min="0" required></div>
+  <div><label>Partner inspected?</label><select name="partner_inspected"><option>Y</option><option>N</option></select></div>
+  <div><label>Photo attached?</label><select name="photo_attached"><option>Y</option><option>N</option></select></div>
+  <div><label>Customer's earlier claims</label><input name="customer_prior_claims" type="number" min="0" value="0"></div>
+  <div><label>Serial number</label><input name="product_serial" placeholder="KH123456789"></div>
+  <div><label>Submitted at (optional)</label><input name="submitted_at" placeholder="2026-09-30 14:05"></div>
+ </div><div class="row"><button type="submit">Check claim</button><span id="busy" class="mut"></span></div></form>
+</div>
+<div id="out"></div>
+<p class="mut">Cost per check: Rs 0 (runs locally, no paid API). Based on 15 months of Kestrel claims; reasons come from patterns in that history.</p>
+<script>
+const EX=[{partner_id:"SP3160",sku:"KH-AF-02",claim_amount_inr:1450,days_since_purchase:95,partner_inspected:"N",photo_attached:"Y",customer_prior_claims:1,product_serial:"KH482913377"},
+{partner_id:"SP3265",sku:"KH-WP-02",claim_amount_inr:4200,days_since_purchase:260,partner_inspected:"Y",photo_attached:"Y",customer_prior_claims:0,product_serial:"KH771205123"},
+{partner_id:"SP3207",sku:"KH-RV-02",claim_amount_inr:17500,days_since_purchase:200,partner_inspected:"Y",photo_attached:"N",customer_prior_claims:2,product_serial:"KH900112233"}];
+function ex(i){const f=document.getElementById('f');for(const[k,v]of Object.entries(EX[i]))f.elements[k].value=v;f.elements['submitted_at'].value='';}
+async function go(e){e.preventDefault();const o=document.getElementById('out'),b=document.getElementById('busy');b.textContent='Checking...';
+ const d=Object.fromEntries(new FormData(e.target).entries());for(const k of Object.keys(d))if(d[k]==='')delete d[k];
+ try{const r=await fetch('/score',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(d)});const j=await r.json();b.textContent='';
+  if(!r.ok){o.innerHTML='<div class="card err"><b>Could not score this claim.</b><br>'+esc(j.error||'Unknown error')+'</div>';return}
+  o.innerHTML='<div class="card"><div class="band '+j.band+'">'+j.band+'</div><div>'+esc(j.action)+'</div><div class="mut">Risk score '+j.score+'</div><ul>'+j.reasons.map(x=>'<li>'+esc(x)+'</li>').join('')+'</ul><p class="mut">'+esc(j.note)+'</p></div>'}
+ catch(err){b.textContent='';o.innerHTML='<div class="card err">Could not reach the scoring service. Is it running?</div>'}}
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
+</script></main></body></html>
